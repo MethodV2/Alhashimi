@@ -1,3 +1,20 @@
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local PromptService = game:GetService("ProximityPromptService")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+
+local LocalPlayer = Players.LocalPlayer
+local Camera = Workspace.CurrentCamera
+
+local TeleportPositions = {
+	CFrame.new(4747.71, 70.57, -335.25),
+	CFrame.new(3520.94, 70.73, -343.74),
+	CFrame.new(2446.02, 70.88, -351.18),
+	CFrame.new(1352.11, 71.02, -358.75),
+	CFrame.new(544.49, 71.13, -364.34),
+}
+
 getgenv().AntiHitEnabled = false
 local PromptConnection = nil
 local SavedHoldDurations = {}
@@ -91,5 +108,6 @@ local function SetPromptPatch(enabled)
 		SavedHoldDurations = {}
 	end
 end
+
 
 return TriggerAntiHit , PromptConnection
