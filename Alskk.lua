@@ -1,0 +1,95 @@
+getgenv().AntiHitEnabled = false
+local PromptConnection = nil
+local SavedHoldDurations = {}
+local ActiveConnections = {}
+
+local function TriggerAntiHit()
+	local Character = LocalPlayer.Character
+	if not Character then return end
+
+	local Humanoid = Character:FindFirstChildOfClass("Humanoid")
+	local RootPart = Character:FindFirstChild("HumanoidRootPart")
+	if not Humanoid or not RootPart then return end
+
+	local OriginalCameraCFrame = Camera.CFrame
+	local OriginalCameraType = Camera.CameraType
+
+	Camera.CameraType = Enum.CameraType.Scriptable
+	Camera.CFrame = OriginalCameraCFrame
+	Humanoid.BreakJointsOnDeath = false
+
+	for _, Descendant in ipairs(Character:GetDescendants()) do
+		if Descendant:IsA("Motor6D") then
+			Descendant.Enabled = true
+		end
+	end
+
+	local hb
+	RootPart.AssemblyLinearVelocity = Vector3.zero
+	RootPart.AssemblyAngularVelocity = Vector3.zero
+
+	-- phase 1: teleport chain (fast, camera locked)
+	for _, TargetCFrame in ipairs(TeleportPositions) do
+		Humanoid.PlatformStand = true
+		Humanoid.Health = 100
+		RootPart.CFrame = TargetCFrame
+		RootPart.AssemblyLinearVelocity = Vector3.zero
+		Camera.CFrame = OriginalCameraCFrame
+		task.wait(0.02)
+	end
+
+	-- phase 2: hold position, hard-lock camera+health (anti-hit window)
+	local t0 = os.clock()
+	hb = RunService.Heartbeat:Connect(function()
+		if os.clock() - t0 > 0.35 then hb:Disconnect() return end
+		Humanoid.Health = 100
+		Humanoid.PlatformStand = true
+		RootPart.CFrame = TeleportPositions[#TeleportPositions]
+		RootPart.AssemblyLinearVelocity = Vector3.zero
+		RootPart.AssemblyAngularVelocity = Vector3.zero
+		Camera.CFrame = OriginalCameraCFrame
+	end)
+
+	task.wait(0.35)
+	Humanoid.PlatformStand = false
+	Camera.CameraType = OriginalCameraType
+end
+
+local function PatchPrompt(Prompt)
+	if not (Prompt and typeof(Prompt) == "Instance" and Prompt:IsA("ProximityPrompt")) then
+		return
+	end
+	if getgenv().AntiHitEnabled then
+		if SavedHoldDurations[Prompt] == nil then
+			SavedHoldDurations[Prompt] = Prompt.HoldDuration
+		end
+		Prompt.HoldDuration = 0
+		Prompt.RequiresLineOfSight = false
+	elseif SavedHoldDurations[Prompt] ~= nil then
+		Prompt.HoldDuration = SavedHoldDurations[Prompt]
+		SavedHoldDurations[Prompt] = nil
+	end
+end
+
+local function SetPromptPatch(enabled)
+	if enabled then
+		for _, item in ipairs(Workspace:GetDescendants()) do
+			PatchPrompt(item)
+		end
+		table.insert(ActiveConnections, Workspace.DescendantAdded:Connect(PatchPrompt))
+		table.insert(ActiveConnections, PromptService.PromptShown:Connect(PatchPrompt))
+	else
+		for _, Connection in ipairs(ActiveConnections) do
+			if Connection then Connection:Disconnect() end
+		end
+		ActiveConnections = {}
+		for Prompt, duration in pairs(SavedHoldDurations) do
+			if Prompt and Prompt.Parent then
+				Prompt.HoldDuration = duration
+			end
+		end
+		SavedHoldDurations = {}
+	end
+end
+
+return TriggerAntiHit , PromptConnection
